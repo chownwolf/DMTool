@@ -1,0 +1,18 @@
+# Backend data
+backend/data/chroma_db/
+backend/data/uploads/
+backend/data/dm_tool.sqlite
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Python virtual envs
+.venv/
+venv/
+env/
