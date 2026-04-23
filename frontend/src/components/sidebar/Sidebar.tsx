@@ -5,6 +5,7 @@ import type { Collection } from '../../types';
 import { useDocuments } from '../../hooks/useDocuments';
 import { CollectionSelector } from './CollectionSelector';
 import { DocumentList } from './DocumentList';
+import { SearchPanel } from './SearchPanel';
 import { SessionList } from './SessionList';
 import { UploadDropzone } from './UploadDropzone';
 
@@ -19,13 +20,13 @@ interface Props {
   onNewSession: () => void;
 }
 
-type Panel = 'chat' | 'books';
+type Panel = 'chat' | 'books' | 'search';
 
 export function Sidebar({
   selectedCollection, onCollectionChange, onClearChat,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onNewSession,
 }: Props) {
-  const { documents, loading, upload, remove } = useDocuments();
+  const { documents, progressMap, loading, upload, remove } = useDocuments();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [panel, setPanel] = useState<Panel>('chat');
 
@@ -45,7 +46,7 @@ export function Sidebar({
 
       {/* Tab bar */}
       <div style={{ display: 'flex', borderBottom: '1px solid #3d2a14' }}>
-        {(['chat', 'books'] as Panel[]).map((p) => (
+        {(['chat', 'search', 'books'] as Panel[]).map((p) => (
           <button
             key={p}
             onClick={() => setPanel(p)}
@@ -57,19 +58,18 @@ export function Sidebar({
               color: panel === p ? '#f5d5a0' : '#7a5a3a',
               padding: '7px 0',
               cursor: 'pointer',
-              fontSize: '0.72rem',
+              fontSize: '0.65rem',
               fontFamily: 'Cinzel, Georgia, serif',
-              textTransform: 'capitalize',
             }}
           >
-            {p === 'chat' ? 'Sessions' : 'Books'}
+            {p === 'chat' ? 'Sessions' : p === 'search' ? 'Search' : 'Books'}
           </button>
         ))}
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-        {panel === 'chat' ? (
+        {panel === 'chat' && (
           <SessionList
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -77,13 +77,17 @@ export function Sidebar({
             onDelete={onDeleteSession}
             onNew={onNewSession}
           />
-        ) : (
+        )}
+        {panel === 'search' && (
+          <SearchPanel collection={selectedCollection} />
+        )}
+        {panel === 'books' && (
           <>
             <CollectionSelector collections={collections} selected={selectedCollection} onChange={onCollectionChange} />
             <SectionLabel>Add Books</SectionLabel>
             <UploadDropzone onUpload={upload} loading={loading} />
             <SectionLabel style={{ marginTop: 16 }}>Books</SectionLabel>
-            <DocumentList documents={documents} onDelete={remove} />
+            <DocumentList documents={documents} progressMap={progressMap} onDelete={remove} />
           </>
         )}
       </div>

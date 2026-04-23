@@ -13,6 +13,7 @@ from api.documents import router as documents_router
 from api.collections import router as collections_router
 from api.chat import router as chat_router
 from api.sessions import router as sessions_router
+from api.search import router as search_router
 
 
 @asynccontextmanager
@@ -43,3 +44,4 @@ app.include_router(documents_router, prefix="/api")
 app.include_router(collections_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(sessions_router, prefix="/api")
+app.include_router(search_router, prefix="/api")

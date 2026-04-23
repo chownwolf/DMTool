@@ -79,6 +79,30 @@ export interface Session {
   updated_at: string;
 }
 
+export async function searchChunks(
+  q: string,
+  collection: string | null,
+  mode: 'fts' | 'vector' | 'hybrid' = 'hybrid',
+  limit = 20,
+): Promise<SearchResult[]> {
+  const params = new URLSearchParams({ q, mode, limit: String(limit) });
+  if (collection) params.set('collection', collection);
+  const res = await fetch(`${BASE}/search?${params}`);
+  const data = await res.json();
+  return data.results ?? [];
+}
+
+export interface SearchResult {
+  chunk_id: string;
+  text: string;
+  book_name: string;
+  section_path: string;
+  page_start: number;
+  content_type: string;
+  score_type: 'fts' | 'vector';
+  distance?: number;
+}
+
 export interface SavedMessage {
   id: string;
   session_id: string;
