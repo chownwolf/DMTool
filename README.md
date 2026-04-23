@@ -1,8 +1,6 @@
 # D&D 3.5 DM Tool
 
-A local AI-powered reference tool for Dungeons & Dragons 3.5 Edition Dungeon Masters. Upload your rulebooks (PDFs or Word docs), then ask questions and get precise answers with source citations. Stat blocks, spells, and feats are rendered in their proper D&D format.
-
-![Layout: sidebar with book list on left, chat interface on right]
+A local AI-powered reference tool for Dungeons & Dragons 3.5 Edition Dungeon Masters. Upload your rulebooks (PDFs or Word docs), ask questions, and get precise answers with source citations. Stat blocks, spells, and feats are rendered in proper D&D format. All data stays on your machine.
 
 ---
 
@@ -12,20 +10,24 @@ A local AI-powered reference tool for Dungeons & Dragons 3.5 Edition Dungeon Mas
 - **Upload your books** — PDF and DOCX support (PHB, DMG, MM, supplements, homebrew)
 - **Formatted output** — stat blocks, spell entries, and feat entries render as proper D&D cards
 - **Source citations** — every answer shows which book and page it came from
-- **Local-first** — all data stays on your machine; no cloud database
-- **Flexible LLM** — use Claude API, Ollama (local), or LM Studio (local)
+- **Persistent sessions** — chat history saved to SQLite; resume any conversation
+- **Dice roller** — type `/roll 4d6dl` or click quick-roll buttons; nat20/nat1 highlighted
+- **Keyword search** — search indexed content directly (hybrid, FTS, or vector mode)
+- **Upload progress** — step-by-step progress bar (Parsing → Chunking → Embedding → Indexing)
+- **Local-first** — no cloud database, no telemetry
+- **Flexible LLM** — Claude API, Ollama, or LM Studio
 
 ---
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - Node.js 18+
 - An LLM (one of):
   - [Anthropic API key](https://console.anthropic.com/) for Claude
   - [Ollama](https://ollama.com/) running locally
   - [LM Studio](https://lmstudio.ai/) running locally
-- NVIDIA GPU recommended (RTX 3080+ ideal) — used for local embeddings. CPU works but is slower.
+- NVIDIA GPU recommended — used for local embeddings. CPU works but is slower.
 
 ---
 
@@ -41,27 +43,32 @@ cp .env.example .env
 
 Edit `.env` and set your LLM provider (see [LLM Configuration](#llm-configuration) below).
 
-### 2. Install backend dependencies
+### 2. Create a Python virtual environment
 
 ```bash
-make install-backend
-# or manually:
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+```
+
+> **Required on most modern Linux distros** — system Python is managed by the distro and blocks direct pip installs.
+
+### 3. Install backend dependencies
+
+```bash
 cd backend && pip install -r requirements.txt
 ```
 
-> **Note:** `torch` and `sentence-transformers` are large downloads (~2GB). They run the local embedding model that powers search.
+> `torch` and `sentence-transformers` are large downloads (~2 GB). They run the local embedding model that powers search.
 
-### 3. Install frontend dependencies
+### 4. Install frontend dependencies
 
 ```bash
-make install-frontend
-# or manually:
 cd frontend && npm install
 ```
 
-### 4. Start the servers
+### 5. Start the servers
 
-Open two terminals:
+Open two terminals (with the venv active in the backend terminal):
 
 ```bash
 # Terminal 1 — backend API (port 8000)
@@ -86,7 +93,7 @@ LLM_PROVIDER=claude
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Uses `claude-sonnet-4-6` by default. Prompt caching is enabled automatically, which cuts API costs by ~90% on repeated queries.
+Uses `claude-sonnet-4-6` by default. Prompt caching is enabled automatically, cutting API costs ~90% on repeated queries.
 
 ### Ollama
 
@@ -111,9 +118,20 @@ LLM_PROVIDER=lmstudio
 LLM_MODEL=your-model-name
 ```
 
-The model name must match exactly what's loaded in LM Studio. Default URL: `http://localhost:1234/v1`.
+The model name must match exactly what's shown in LM Studio.
 
-### Custom URL or model
+### Context limit for small local models
+
+Models with a small context window (4096 tokens) need this set to prevent overflow:
+
+```env
+LLM_CONTEXT_LIMIT=4500
+LLM_MAX_TOKENS=512
+```
+
+The backend trims retrieved chunks to fit within the budget before sending to the LLM.
+
+### Custom URL
 
 ```env
 LLM_PROVIDER=ollama
@@ -127,13 +145,13 @@ LLM_BASE_URL=http://192.168.1.100:11434/v1
 
 ### Adding Books
 
-1. Open the sidebar (left panel)
-2. Drag and drop a PDF or DOCX file onto the upload area, or click to browse
+1. Click the **Books** tab in the sidebar
+2. Drag and drop a PDF or DOCX onto the upload area, or click to browse
 3. Enter the book name (e.g. `Player's Handbook`)
-4. Optionally set a collection name to group books (e.g. `core_rules`, `supplements`)
+4. Optionally set a collection to group books (e.g. `core_rules`, `supplements`)
 5. Click **Upload & Index**
 
-The book is processed in the background. Status shows as **Queued → Processing → Indexed**. Large books (300+ pages) take a few minutes. Once indexed, all content is searchable.
+Processing runs in the background. The progress bar shows the current step (Parsing / Cleaning / Chunking / Embedding / Indexing) and chunk count. Large books (300+ pages) take a few minutes.
 
 ### Asking Questions
 
@@ -143,11 +161,43 @@ Type in the chat box and press **Ctrl+Enter** (or click **Ask**). Examples:
 - `Give me the full stat block for a Troll`
 - `How does Fireball work? What's the area of effect?`
 - `What are the prerequisites for Cleave?`
-- `What happens when you cast a spell while in melee?`
+
+### Sessions
+
+Chat history is persisted automatically. Each conversation is saved as a session.
+
+- **Sessions tab** (sidebar) — list all past sessions, load or delete them
+- **New Chat** button (sidebar footer) — starts a fresh session
+- Sessions are linked to a collection at creation time
+
+### Dice Roller
+
+Type dice expressions directly in chat:
+
+```
+/roll 1d20
+/roll 4d6dl        # roll 4, drop lowest (ability score gen)
+/roll 2d8+5
+/roll 3d6-2
+```
+
+Or click quick-roll buttons above the chat input (d4 / d6 / d8 / d10 / d12 / d20 / d100).
+
+Results show each die individually. Nat20 glows gold, nat1 glows red. Dropped dice are shown strikethrough.
+
+### Keyword Search
+
+Click the **Search** tab to search indexed content directly without asking the LLM.
+
+- **Hybrid** — combines keyword and semantic results (default, best coverage)
+- **FTS** — keyword only (fast, good for exact names)
+- **Vector** — semantic only (good for concept queries)
+
+Results show content type badge, book name, page number, and section path. Click any result to expand the full text.
 
 ### Collections
 
-Use the **Collection** dropdown to limit search to a specific group of books. Useful if you have core rules separate from supplements and want to avoid cross-contamination.
+Use the **Collection** dropdown to scope answers to a specific group of books. Useful for keeping core rules separate from supplements.
 
 ### Response Formats
 
@@ -159,6 +209,7 @@ Answers are automatically rendered based on content type:
 | Stat block | D&D 3.5 card (maroon header, tan body, ability grid) |
 | Spell entry | Blue card with school, components, duration, etc. |
 | Feat entry | Green card with prerequisites, benefit, normal, special |
+| Dice roll | Die squares with result, modifiers, nat20/nat1 highlight |
 
 Each answer shows collapsible source citations (book + page + section).
 
@@ -168,25 +219,26 @@ Each answer shows collapsible source citations (book + page + section).
 
 ```
 DMTool/
-├── backend/                  # FastAPI Python backend
-│   ├── api/                  # REST endpoints (chat, documents, collections, health)
-│   ├── core/                 # Embedder, vector store, LLM client, prompt builder
-│   ├── detection/            # Content classifier (stat block / spell / feat detection)
-│   ├── ingestion/            # PDF/DOCX parsers, chunker, pipeline
-│   ├── models/               # Pydantic schemas
-│   ├── db/                   # SQLite store + FTS5 keyword search
-│   └── data/                 # Local data (gitignored)
-│       ├── chroma_db/        # Vector embeddings
-│       ├── uploads/          # Uploaded source files
-│       └── dm_tool.sqlite    # Document registry
-├── frontend/                 # React + TypeScript frontend
+├── backend/
+│   ├── api/              # REST endpoints: chat, documents, collections, sessions, search, health
+│   ├── core/             # Embedder, vector store (ChromaDB), LLM client, prompt builder
+│   ├── detection/        # Content classifier — stat block / spell / feat regex scoring
+│   ├── ingestion/        # PDF/DOCX parsers, D&D-aware chunker, pipeline
+│   ├── models/           # Pydantic schemas
+│   ├── db/               # SQLite: document registry, sessions, messages, FTS5 index
+│   └── data/             # Local data (gitignored)
+│       ├── chroma_db/    # Vector embeddings (ChromaDB)
+│       ├── uploads/      # Uploaded source files
+│       └── dm_tool.sqlite
+├── frontend/
 │   └── src/
 │       ├── components/
-│       │   ├── chat/         # ChatWindow, ChatInput, MessageBubble, CitationList
-│       │   ├── renderers/    # StatBlockRenderer, SpellRenderer, FeatRenderer, PlainTextRenderer
-│       │   └── sidebar/      # Sidebar, UploadDropzone, DocumentList, CollectionSelector
-│       ├── hooks/            # useChat, useStream, useDocuments
-│       └── api/              # Typed fetch wrappers
+│       │   ├── chat/         # ChatWindow, ChatInput, MessageBubble, CitationList, DiceStrip
+│       │   ├── renderers/    # StatBlockRenderer, SpellRenderer, FeatRenderer, DiceRenderer, PlainTextRenderer
+│       │   └── sidebar/      # Sidebar, UploadDropzone, DocumentList, CollectionSelector, SearchPanel, SessionList
+│       ├── hooks/            # useChat, useStream, useDocuments, useSessions
+│       ├── utils/            # dice.ts — roll parser
+│       └── api/              # Typed fetch wrappers (client.ts)
 ├── .env.example
 ├── Makefile
 └── README.md
@@ -196,11 +248,11 @@ DMTool/
 
 ## How It Works
 
-1. **Ingestion** — Uploaded files are parsed with PyMuPDF (PDF) or python-docx (DOCX). Text is cleaned (dehyphenation, ligature fixes), then chunked using a D&D-aware state machine that keeps stat blocks, spell entries, and feat entries intact as single chunks. Chunks are embedded with `all-MiniLM-L6-v2` (runs locally on GPU) and stored in ChromaDB.
+1. **Ingestion** — Files are parsed with PyMuPDF (PDF) or python-docx (DOCX). Text is cleaned (dehyphenation, ligature fixes), then chunked using a D&D-aware state machine that keeps stat blocks, spell entries, and feat entries intact as single chunks. Chunks are embedded with `all-MiniLM-L6-v2` (runs locally on GPU) and stored in ChromaDB. An FTS5 index is built in SQLite for keyword search.
 
-2. **Query** — Your question is embedded and used to find the top 8 most relevant chunks via cosine similarity search. A keyword fallback (SQLite FTS5) catches proper noun lookups (creature names, spell names) that embedding search can miss.
+2. **Query** — The question is embedded and used to find the top 8 most relevant chunks via cosine similarity. A keyword fallback (FTS5) catches proper noun lookups (creature names, spell names) that embedding search can miss. Results are deduplicated and merged.
 
-3. **Answer** — Retrieved chunks are sent to the LLM as context. The LLM answers using only that context and includes source citations. The response is streamed token-by-token. After streaming completes, regex scoring detects whether the response is a stat block, spell, feat, or plain rules text, and routes it to the appropriate renderer.
+3. **Answer** — Retrieved chunks are sent to the LLM as context. The response is streamed token-by-token. After streaming, regex scoring detects whether the response is a stat block, spell, feat, or rules text and routes it to the appropriate renderer. Answers and user messages are saved to the active session.
 
 ---
 
@@ -213,15 +265,17 @@ DMTool/
 | `make install-frontend` | Install npm dependencies only |
 | `make dev-backend` | Start FastAPI on port 8000 (auto-reload) |
 | `make dev-frontend` | Start Vite dev server on port 5173 |
+| `make dev` | Start both servers concurrently |
 | `make test` | Run backend tests |
-| `make clean` | Delete all indexed data and uploads |
+| `make clean` | Delete all indexed data, uploads, and the SQLite DB |
 
 ---
 
 ## Tips
 
-- **Best results** come from clean PDF exports, not scanned images. Scanned books with OCR artifacts will still work but may have lower accuracy.
-- **Book names** are included in every citation, so use descriptive names (`Monster Manual` not `mm35`).
-- **Collections** help when you want to ask questions scoped to core rules only vs. including supplements.
-- **Local models** (Ollama/LM Studio) work well for rules lookups but may produce less precise stat block formatting than Claude. A 13B+ parameter model is recommended for best results.
-- The embedding model loads once at startup and stays in GPU memory. First startup takes ~20 seconds while the model loads.
+- **Best results** come from clean PDF exports, not scanned images. Scanned books with OCR artifacts will work but accuracy drops.
+- **Book names** appear in every citation — use descriptive names (`Monster Manual` not `mm35`).
+- **Collections** scope search to a subset of books. Useful when core rules and supplements overlap.
+- **Local models** work well for rules lookups. Use 13B+ parameters for reliable stat block formatting. Set `LLM_CONTEXT_LIMIT` if you hit context overflow errors.
+- **First startup** takes ~20 seconds while the embedding model loads into GPU memory.
+- **LM Studio cold starts** — the first query after loading a model may be slow (~30s) while the model moves into VRAM. Subsequent queries are fast.
