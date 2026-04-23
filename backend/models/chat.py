@@ -10,7 +10,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     collection: Optional[str] = None
-    conversation_id: Optional[str] = None
+    session_id: Optional[str] = None
     history: list[ChatMessage] = []
     max_results: int = Field(default=8, ge=1, le=20)
 

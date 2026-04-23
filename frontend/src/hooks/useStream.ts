@@ -15,6 +15,7 @@ export function useStream() {
     message: string,
     collection: string | null,
     history: Array<{ role: string; content: string }>,
+    sessionId: string | null,
     callbacks: StreamCallbacks,
   ) {
     abortRef.current?.abort();
@@ -25,7 +26,7 @@ export function useStream() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, collection, history }),
+        body: JSON.stringify({ message, collection, history, session_id: sessionId }),
         signal: ctrl.signal,
       });
 

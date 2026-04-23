@@ -44,3 +44,47 @@ export async function fetchHealth(): Promise<Record<string, unknown>> {
   const res = await fetch(`${BASE}/health`);
   return res.json();
 }
+
+// Sessions
+export async function fetchSessions(): Promise<Session[]> {
+  const res = await fetch(`${BASE}/sessions`);
+  const data = await res.json();
+  return data.sessions;
+}
+
+export async function createSession(title: string, collection: string | null): Promise<{ id: string; title: string }> {
+  const res = await fetch(`${BASE}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, collection }),
+  });
+  return res.json();
+}
+
+export async function fetchSessionMessages(sessionId: string): Promise<SavedMessage[]> {
+  const res = await fetch(`${BASE}/sessions/${sessionId}/messages`);
+  const data = await res.json();
+  return data.messages;
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await fetch(`${BASE}/sessions/${sessionId}`, { method: 'DELETE' });
+}
+
+export interface Session {
+  id: string;
+  title: string;
+  collection: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  content_type: string;
+  citations: unknown[];
+  created_at: string;
+}

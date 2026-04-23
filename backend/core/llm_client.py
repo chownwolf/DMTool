@@ -79,6 +79,7 @@ async def _stream_claude(
 # ---------------------------------------------------------------------------
 
 def _openai_compat_client():
+    import httpx
     from openai import AsyncOpenAI
 
     provider = settings.llm_provider.lower()
@@ -90,7 +91,9 @@ def _openai_compat_client():
         base_url = settings.lmstudio_base_url
 
     api_key = settings.lm_studio_api_key if provider == "lmstudio" else "not-needed"
-    return AsyncOpenAI(base_url=base_url, api_key=api_key)
+    # Long connect timeout: first request warms up model in VRAM (can take 30s+)
+    timeout = httpx.Timeout(600.0, connect=60.0)
+    return AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
 
 
 def _openai_model() -> str:

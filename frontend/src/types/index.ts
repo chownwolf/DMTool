@@ -1,4 +1,4 @@
-export type ContentType = 'stat_block' | 'spell' | 'feat' | 'rules_text' | 'table' | 'flavor';
+export type ContentType = 'stat_block' | 'spell' | 'feat' | 'rules_text' | 'table' | 'flavor' | 'dice_roll';
 
 export interface Citation {
   book: string;
@@ -13,6 +13,7 @@ export interface Message {
   contentType: ContentType;
   citations: Citation[];
   isStreaming?: boolean;
+  diceRoll?: import('../utils/dice').DiceRollResult;
 }
 
 export interface DocumentRecord {
@@ -39,6 +40,14 @@ export interface DocumentStatus {
 export interface Collection {
   name: string;
   document_count: number;
+}
+
+export interface Session {
+  id: string;
+  title: string;
+  collection: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface StatBlock {

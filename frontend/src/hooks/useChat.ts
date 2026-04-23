@@ -1,9 +1,17 @@
 import { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Citation, ContentType, Message } from '../types';
+import { isDiceCommand, rollDice } from '../utils/dice';
 import { useStream } from './useStream';
 
-export function useChat(collection: string | null) {
+interface UseChatOptions {
+  collection: string | null;
+  sessionId: string | null;
+  onNeedSession: (firstMessage: string) => Promise<string>;
+  onSessionUpdated: () => void;
+}
+
+export function useChat({ collection, sessionId, onNeedSession, onSessionUpdated }: UseChatOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const { startStream, cancel } = useStream();
@@ -11,6 +19,28 @@ export function useChat(collection: string | null) {
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || isStreaming) return;
+
+      // Intercept dice commands — handle locally, no LLM call
+      const { isRoll, notation } = isDiceCommand(text);
+      if (isRoll) {
+        const result = rollDice(notation);
+        const diceMsg: Message = {
+          id: uuidv4(),
+          role: 'assistant',
+          content: notation,
+          contentType: 'dice_roll',
+          citations: [],
+          diceRoll: result ?? undefined,
+        };
+        setMessages((prev) => [...prev, diceMsg]);
+        return;
+      }
+
+      // Create session on first message if none active
+      let sid = sessionId;
+      if (!sid) {
+        sid = await onNeedSession(text);
+      }
 
       const userMsg: Message = {
         id: uuidv4(),
@@ -33,33 +63,27 @@ export function useChat(collection: string | null) {
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
 
-      const history = messages.slice(-6).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const history = messages.slice(-6).map((m) => ({ role: m.role, content: m.content }));
 
-      await startStream(text, collection, history, {
+      await startStream(text, collection, history, sid, {
         onChunk: (chunk) =>
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
           ),
         onContentType: (type) =>
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId ? { ...m, contentType: type as ContentType } : m,
-            ),
+            prev.map((m) => (m.id === assistantId ? { ...m, contentType: type as ContentType } : m)),
           ),
         onCitations: (citations) =>
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId ? { ...m, citations: citations as Citation[] } : m,
-            ),
+            prev.map((m) => (m.id === assistantId ? { ...m, citations: citations as Citation[] } : m)),
           ),
         onDone: () => {
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m)),
           );
           setIsStreaming(false);
+          onSessionUpdated();
         },
         onError: (err) => {
           setMessages((prev) =>
@@ -73,14 +97,20 @@ export function useChat(collection: string | null) {
         },
       });
     },
-    [messages, isStreaming, collection, startStream],
+    [messages, isStreaming, collection, sessionId, onNeedSession, onSessionUpdated, startStream],
   );
 
-  function clearChat() {
+  function loadMessages(msgs: Message[]) {
+    cancel();
+    setMessages(msgs);
+    setIsStreaming(false);
+  }
+
+  function clearMessages() {
     cancel();
     setMessages([]);
     setIsStreaming(false);
   }
 
-  return { messages, isStreaming, sendMessage, clearChat };
+  return { messages, isStreaming, sendMessage, loadMessages, clearMessages };
 }

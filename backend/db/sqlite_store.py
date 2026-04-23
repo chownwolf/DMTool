@@ -19,6 +19,28 @@ async def init_db() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(settings.sqlite_path) as db:
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL DEFAULT 'New Session',
+                collection TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                content_type TEXT NOT NULL DEFAULT 'rules_text',
+                citations TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)")
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS documents (
                 id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,
@@ -180,6 +202,81 @@ async def fts_search(query: str, limit: int = 8) -> list[dict]:
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Sessions
+# ---------------------------------------------------------------------------
+
+async def create_session(session_id: str, title: str, collection: Optional[str]) -> None:
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        await db.execute(
+            "INSERT INTO sessions (id, title, collection, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (session_id, title, collection, now, now),
+        )
+        await db.commit()
+
+
+async def list_sessions() -> list[dict]:
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM sessions ORDER BY updated_at DESC LIMIT 50"
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def delete_session(session_id: str) -> None:
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        await db.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+        await db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        await db.commit()
+
+
+async def touch_session(session_id: str) -> None:
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        await db.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (now, session_id))
+        await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Messages
+# ---------------------------------------------------------------------------
+
+async def save_message(
+    message_id: str,
+    session_id: str,
+    role: str,
+    content: str,
+    content_type: str = "rules_text",
+    citations: list = None,
+) -> None:
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        await db.execute(
+            "INSERT INTO messages (id, session_id, role, content, content_type, citations, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (message_id, session_id, role, content, content_type, json.dumps(citations or []), now),
+        )
+        await db.commit()
+
+
+async def get_session_messages(session_id: str) -> list[dict]:
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC",
+            (session_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            result = []
+            for r in rows:
+                d = dict(r)
+                d["citations"] = json.loads(d["citations"])
+                result.append(d)
+            return result
 
 
 def _row_to_document(row) -> DocumentRecord:

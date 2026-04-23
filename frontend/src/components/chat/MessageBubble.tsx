@@ -1,4 +1,5 @@
 import type { Message } from '../../types';
+import { DiceRenderer } from '../renderers/DiceRenderer';
 import { FeatRenderer } from '../renderers/FeatRenderer';
 import { PlainTextRenderer } from '../renderers/PlainTextRenderer';
 import { SpellRenderer } from '../renderers/SpellRenderer';
@@ -66,7 +67,11 @@ export function MessageBubble({ message }: Props) {
 }
 
 function ContentRenderer({ message }: { message: Message }) {
-  const { content, contentType } = message;
+  const { content, contentType, diceRoll } = message;
+
+  if (contentType === 'dice_roll' && diceRoll) {
+    return <DiceRenderer result={diceRoll} />;
+  }
   if (!content) return null;
 
   switch (contentType) {
