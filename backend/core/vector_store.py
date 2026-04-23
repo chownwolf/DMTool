@@ -1,7 +1,6 @@
 from typing import Optional
 
 import chromadb
-from chromadb.config import Settings as ChromaSettings
 from loguru import logger
 
 from config import settings
@@ -13,10 +12,7 @@ def get_chroma_client() -> chromadb.PersistentClient:
     global _client
     if _client is None:
         settings.chroma_dir.mkdir(parents=True, exist_ok=True)
-        _client = chromadb.PersistentClient(
-            path=str(settings.chroma_dir),
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
+        _client = chromadb.PersistentClient(path=str(settings.chroma_dir))
         logger.info(f"ChromaDB client ready at {settings.chroma_dir}")
     return _client
 
@@ -24,9 +20,8 @@ def get_chroma_client() -> chromadb.PersistentClient:
 class VectorStore:
     COLLECTION_NAME = "dnd_documents"
 
-    def __init__(self) -> None:
-        self.client = get_chroma_client()
-        self._collection = self.client.get_or_create_collection(
+    def _col(self):
+        return get_chroma_client().get_or_create_collection(
             name=self.COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"},
         )
@@ -38,10 +33,7 @@ class VectorStore:
         documents: list[str],
         metadatas: list[dict],
     ) -> None:
-        self.client.get_or_create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        ).upsert(
+        self._col().upsert(
             ids=ids,
             embeddings=embeddings,
             documents=documents,
@@ -54,16 +46,17 @@ class VectorStore:
         n_results: int = 8,
         where: Optional[dict] = None,
     ) -> list[dict]:
-        col = self.client.get_or_create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
+        col = self._col()
         count = col.count()
         if count == 0:
             return []
         n = min(n_results, count)
 
-        kwargs: dict = {"query_embeddings": [query_embedding], "n_results": n, "include": ["documents", "metadatas", "distances"]}
+        kwargs: dict = {
+            "query_embeddings": [query_embedding],
+            "n_results": n,
+            "include": ["documents", "metadatas", "distances"],
+        }
         if where:
             kwargs["where"] = where
 
@@ -78,17 +71,14 @@ class VectorStore:
         return chunks
 
     def delete_by_document(self, document_id: str) -> None:
-        col = self.client.get_or_create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
+        col = self._col()
         results = col.get(where={"document_id": document_id})
         if results["ids"]:
             col.delete(ids=results["ids"])
             logger.info(f"Deleted {len(results['ids'])} chunks for document {document_id}")
 
     def count(self) -> int:
-        return self._collection.count()
+        return self._col().count()
 
     def status(self) -> dict:
         try:

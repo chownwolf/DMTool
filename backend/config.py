@@ -2,14 +2,22 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_ENV_FILE = Path(__file__).parent / ".env"
+if not _ENV_FILE.exists():
+    _ENV_FILE = Path(__file__).parent.parent / ".env"
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=str(_ENV_FILE), env_file_encoding="utf-8")
 
     # LLM provider: "claude" | "ollama" | "lmstudio"
     llm_provider: str = "claude"
     llm_model: str = ""          # overrides provider default when set
     llm_base_url: str = ""       # overrides provider default base URL when set
-    llm_max_tokens: int = 2048
+    llm_max_tokens: int = 512
+    # Total token budget for input (system + context + question).
+    # Set to your model's n_ctx. 0 = unlimited (Claude/large models).
+    llm_context_limit: int = 0
 
     # Claude-specific
     anthropic_api_key: str = ""
@@ -21,6 +29,7 @@ class Settings(BaseSettings):
     # LM Studio defaults (http://localhost:1234/v1, model: auto-detected)
     lmstudio_base_url: str = "http://localhost:1234/v1"
     lmstudio_default_model: str = "local-model"
+    lm_studio_api_key: str = "not-needed"
 
     base_dir: Path = Path(__file__).parent
     data_dir: Path = Path(__file__).parent / "data"

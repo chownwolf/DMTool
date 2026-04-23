@@ -89,7 +89,8 @@ def _openai_compat_client():
     else:  # lmstudio
         base_url = settings.lmstudio_base_url
 
-    return AsyncOpenAI(base_url=base_url, api_key="not-needed")
+    api_key = settings.lm_studio_api_key if provider == "lmstudio" else "not-needed"
+    return AsyncOpenAI(base_url=base_url, api_key=api_key)
 
 
 def _openai_model() -> str:
