@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchCollections } from '../../api/client';
 import type { Session } from '../../api/client';
-import type { Collection } from '../../types';
+import type { Collection, SearchResult } from '../../types';
 import { useDocuments } from '../../hooks/useDocuments';
 import { CollectionSelector } from './CollectionSelector';
 import { DocumentList } from './DocumentList';
@@ -18,6 +18,7 @@ interface Props {
   onLoadSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   onNewSession: () => void;
+  onSearchResults: (query: string, mode: 'hybrid' | 'fts' | 'vector', results: SearchResult[]) => void;
 }
 
 type Panel = 'chat' | 'books' | 'search';
@@ -25,6 +26,7 @@ type Panel = 'chat' | 'books' | 'search';
 export function Sidebar({
   selectedCollection, onCollectionChange, onClearChat,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onNewSession,
+  onSearchResults,
 }: Props) {
   const { documents, progressMap, loading, upload, remove } = useDocuments();
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -79,7 +81,7 @@ export function Sidebar({
           />
         )}
         {panel === 'search' && (
-          <SearchPanel collection={selectedCollection} />
+          <SearchPanel collection={selectedCollection} onResults={onSearchResults} />
         )}
         {panel === 'books' && (
           <>

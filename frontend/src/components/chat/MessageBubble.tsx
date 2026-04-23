@@ -2,6 +2,7 @@ import type { Message } from '../../types';
 import { DiceRenderer } from '../renderers/DiceRenderer';
 import { FeatRenderer } from '../renderers/FeatRenderer';
 import { PlainTextRenderer } from '../renderers/PlainTextRenderer';
+import { SearchResultsRenderer } from '../renderers/SearchResultsRenderer';
 import { SpellRenderer } from '../renderers/SpellRenderer';
 import { StatBlockRenderer } from '../renderers/StatBlockRenderer';
 import { CitationList } from './CitationList';
@@ -67,10 +68,13 @@ export function MessageBubble({ message }: Props) {
 }
 
 function ContentRenderer({ message }: { message: Message }) {
-  const { content, contentType, diceRoll } = message;
+  const { content, contentType, diceRoll, searchResults } = message;
 
   if (contentType === 'dice_roll' && diceRoll) {
     return <DiceRenderer result={diceRoll} />;
+  }
+  if (contentType === 'search_results') {
+    return <SearchResultsRenderer query={content} results={searchResults ?? []} />;
   }
   if (!content) return null;
 

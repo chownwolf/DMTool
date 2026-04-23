@@ -114,6 +114,12 @@ async def _stream_openai_compat(
     model = _openai_model()
     messages = build_messages(user_message, retrieved_chunks, history)
 
+    provider = settings.llm_provider
+    base_url = settings.llm_base_url or (
+        settings.ollama_base_url if provider == "ollama" else settings.lmstudio_base_url
+    )
+    logger.info(f"LLM request: provider={provider} model={model!r} url={base_url}")
+
     # Prepend system message (OpenAI format)
     oai_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
 
@@ -124,10 +130,17 @@ async def _stream_openai_compat(
             max_tokens=settings.llm_max_tokens,
             stream=True,
         )
+        got_any = False
         async for chunk in stream:
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta.content
             if delta:
+                got_any = True
                 yield delta
+        if not got_any:
+            logger.warning(f"{provider}: stream completed with zero content — model={model!r}")
+            yield f"[No response received from {provider}. Check that model {model!r} is loaded in the server.]"
     except Exception as e:
-        logger.error(f"{settings.llm_provider} error: {e}")
-        yield f"\n\n[Error connecting to {settings.llm_provider}: {e}]"
+        logger.error(f"{provider} error: {e}")
+        yield f"\n\n[Error connecting to {provider}: {e}]"

@@ -100,6 +100,10 @@ export function useChat({ collection, sessionId, onNeedSession, onSessionUpdated
     [messages, isStreaming, collection, sessionId, onNeedSession, onSessionUpdated, startStream],
   );
 
+  function pushMessage(msg: Message) {
+    setMessages((prev) => [...prev, msg]);
+  }
+
   function loadMessages(msgs: Message[]) {
     cancel();
     setMessages(msgs);
@@ -112,5 +116,5 @@ export function useChat({ collection, sessionId, onNeedSession, onSessionUpdated
     setIsStreaming(false);
   }
 
-  return { messages, isStreaming, sendMessage, loadMessages, clearMessages };
+  return { messages, isStreaming, sendMessage, pushMessage, loadMessages, clearMessages };
 }

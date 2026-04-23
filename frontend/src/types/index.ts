@@ -1,4 +1,15 @@
-export type ContentType = 'stat_block' | 'spell' | 'feat' | 'rules_text' | 'table' | 'flavor' | 'dice_roll';
+export type ContentType = 'stat_block' | 'spell' | 'feat' | 'rules_text' | 'table' | 'flavor' | 'dice_roll' | 'search_results';
+
+export interface SearchResult {
+  chunk_id: string;
+  text: string;
+  book_name: string;
+  section_path: string;
+  page_start: number;
+  content_type: string;
+  score_type: 'fts' | 'vector';
+  distance?: number;
+}
 
 export interface Citation {
   book: string;
@@ -14,6 +25,7 @@ export interface Message {
   citations: Citation[];
   isStreaming?: boolean;
   diceRoll?: import('../utils/dice').DiceRollResult;
+  searchResults?: SearchResult[];
 }
 
 export interface DocumentRecord {

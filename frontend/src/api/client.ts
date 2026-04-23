@@ -1,4 +1,4 @@
-import type { Collection, DocumentRecord, DocumentStatus } from '../types';
+import type { Collection, DocumentRecord, DocumentStatus, SearchResult } from '../types';
 
 const BASE = '/api';
 
@@ -92,16 +92,7 @@ export async function searchChunks(
   return data.results ?? [];
 }
 
-export interface SearchResult {
-  chunk_id: string;
-  text: string;
-  book_name: string;
-  section_path: string;
-  page_start: number;
-  content_type: string;
-  score_type: 'fts' | 'vector';
-  distance?: number;
-}
+export type { SearchResult };
 
 export interface SavedMessage {
   id: string;
