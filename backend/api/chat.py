@@ -9,6 +9,7 @@ import uuid
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+from loguru import logger
 
 from config import settings
 from core.embedder import Embedder
@@ -41,28 +42,55 @@ async def _stream(request: ChatRequest):
 
         # 2. Vector search
         vs = VectorStore()
+        total_in_db = vs.count()
         where = {"collection": request.collection} if request.collection else None
         vector_results = vs.query(query_vec, n_results=request.max_results, where=where)
+        logger.info(f"Retrieval: db_total={total_in_db} vector_hits={len(vector_results)} collection_filter={request.collection!r}")
+        for i, r in enumerate(vector_results[:3]):
+            meta = r.get("metadata", {})
+            preview = r.get("text", "")[:80].replace("\n", " ")
+            logger.info(f"  chunk[{i}] book={meta.get('book_name')} dist={r.get('distance', '?'):.3f} | {preview}")
 
-        # 3. FTS keyword fallback
-        proper_nouns = re.findall(r"\b[A-Z][a-z]{2,}\b", request.message)
+        # 3. FTS keyword fallback — OR query across significant terms
+        _STOPWORDS = {
+            "what", "how", "who", "where", "when", "why", "give", "tell",
+            "show", "find", "list", "does", "can", "will", "are", "get",
+            "make", "take", "with", "from", "that", "this", "the", "and",
+            "for", "its", "about", "area", "effect", "stat", "block", "full",
+            "me", "my", "you", "your", "all", "any", "would", "could", "have",
+            "has", "had", "not", "use", "used", "work", "works", "is", "in",
+            "on", "at", "to", "a", "an", "of", "do", "did", "be", "been",
+            "way", "into", "out", "also", "just", "more", "some", "many",
+        }
+        terms = list(dict.fromkeys(
+            w.lower() for w in re.findall(r"\b[A-Za-z]{3,}\b", request.message)
+            if w.lower() not in _STOPWORDS
+        ))
+
         fts_results = []
-        if proper_nouns:
+        if terms:
             try:
-                fts_query = " OR ".join(proper_nouns[:3])
-                fts_raw = await fts_search(fts_query, limit=4)
-                seen_ids = {r["metadata"].get("chunk_id") for r in vector_results if "chunk_id" in r.get("metadata", {})}
+                seen_ids = {
+                    f"{r['metadata'].get('document_id')}_chunk_{r['metadata'].get('chunk_index')}"
+                    for r in vector_results if r.get("metadata")
+                }
+                # OR query: "fireball OR spell" → BM25 ranks chunks matching most terms highest
+                fts_query = " OR ".join(terms[:6])
+                fts_raw = await fts_search(fts_query, limit=10)
                 for row in fts_raw:
                     if row["chunk_id"] not in seen_ids:
+                        seen_ids.add(row["chunk_id"])
                         fts_results.append({
                             "text": row["text"],
-                            "metadata": {"book_name": row["book_name"], "section_path": row["section_path"], "chunk_id": row["chunk_id"]},
-                            "distance": 0.5,
+                            "metadata": {"book_name": row["book_name"], "section_path": row["section_path"]},
+                            "distance": 0.4,
                         })
-            except Exception:
-                pass
+                logger.info(f"  FTS query={fts_query!r} hits={len(fts_results)}")
+            except Exception as exc:
+                logger.warning(f"FTS fallback failed: {exc}")
 
-        combined = (vector_results + fts_results)[:request.max_results]
+        # No cap here — let prompt_builder trim to context budget
+        combined = vector_results + fts_results
 
         # 4. Stream LLM response
         full_response = ""

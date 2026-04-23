@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { searchChunks } from '../api/client';
 import type { Citation, ContentType, Message } from '../types';
 import { isDiceCommand, rollDice } from '../utils/dice';
 import { useStream } from './useStream';
+
+export type ChatMode = 'ai' | 'search';
 
 interface UseChatOptions {
   collection: string | null;
@@ -14,11 +17,33 @@ interface UseChatOptions {
 export function useChat({ collection, sessionId, onNeedSession, onSessionUpdated }: UseChatOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [mode, setMode] = useState<ChatMode>('ai');
   const { startStream, cancel } = useStream();
 
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || isStreaming) return;
+
+      // Search mode — skip LLM, run retrieval directly
+      if (mode === 'search') {
+        const userMsg: Message = {
+          id: uuidv4(), role: 'user', content: text,
+          contentType: 'rules_text', citations: [],
+        };
+        setMessages((prev) => [...prev, userMsg]);
+        setIsStreaming(true);
+        try {
+          const results = await searchChunks(text, collection, 'hybrid', 20);
+          setMessages((prev) => [...prev, {
+            id: uuidv4(), role: 'assistant', content: text,
+            contentType: 'search_results', citations: [],
+            searchResults: results,
+          }]);
+        } finally {
+          setIsStreaming(false);
+        }
+        return;
+      }
 
       // Intercept dice commands — handle locally, no LLM call
       const { isRoll, notation } = isDiceCommand(text);
@@ -116,5 +141,5 @@ export function useChat({ collection, sessionId, onNeedSession, onSessionUpdated
     setIsStreaming(false);
   }
 
-  return { messages, isStreaming, sendMessage, pushMessage, loadMessages, clearMessages };
+  return { messages, isStreaming, mode, setMode, sendMessage, pushMessage, loadMessages, clearMessages };
 }

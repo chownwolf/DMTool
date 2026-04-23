@@ -12,7 +12,7 @@ class ChatRequest(BaseModel):
     collection: Optional[str] = None
     session_id: Optional[str] = None
     history: list[ChatMessage] = []
-    max_results: int = Field(default=8, ge=1, le=20)
+    max_results: int = Field(default=12, ge=1, le=20)
 
 
 class Citation(BaseModel):

@@ -14,7 +14,7 @@ export default function App() {
   const { sessions, activeSessionId, startSession, loadSession, removeSession, clearActive, refresh } =
     useSessions();
 
-  const { messages, isStreaming, sendMessage, pushMessage, loadMessages, clearMessages } = useChat({
+  const { messages, isStreaming, mode, setMode, sendMessage, pushMessage, loadMessages, clearMessages } = useChat({
     collection,
     sessionId: activeSessionId,
     onNeedSession: (firstMessage) => startSession(firstMessage, collection),
@@ -70,7 +70,7 @@ export default function App() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#1a0f0a' }}>
         <ChatWindow messages={messages} />
         <DiceStrip onRoll={(notation) => sendMessage(`/roll ${notation}`)} />
-        <ChatInput onSend={sendMessage} disabled={isStreaming} />
+        <ChatInput onSend={sendMessage} disabled={isStreaming} mode={mode} onModeChange={setMode} />
       </div>
     </div>
   );
